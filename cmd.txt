@@ -1,0 +1,6 @@
+อัพเดตงาน
+
+git add .
+git commit -m "อัปเดตงานจาก Windows"
+git push
+
