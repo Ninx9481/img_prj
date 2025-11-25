@@ -4,3 +4,6 @@ git add .
 git commit -m "อัปเดตงานจาก Windows"
 git push
 
+เอา ver. ใหม่
+
+git commit
