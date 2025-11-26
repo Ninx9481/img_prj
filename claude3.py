@@ -263,15 +263,72 @@ class XrayMonkeyProcessor:
         return self.original_image
 
     def display_results(self, step_images):
+        """
+        แสดงผลลัพธ์เป็น 3 แถว:
+        - แถวที่ 1–2: รูปทุกขั้นตอน (ยกเว้นรูปสุดท้าย)
+        - แถวที่ 3: แสดงรูปสุดท้าย (Final Result) อยู่ตรงกลางแถว
+        และย่อขนาดหน้าต่างลงประมาณ 20%
+        """
         n = len(step_images)
-        fig, axes = plt.subplots(1, n, figsize=(5 * n, 5))
-        if n == 1:
-            axes = [axes]
+        if n == 0:
+            return
 
-        for ax, (title, img) in zip(axes, step_images):
+        # กรณีมีรูปเดียว แสดงปกติ
+        if n == 1:
+            title, img = step_images[0]
+            fig, ax = plt.subplots(figsize=(4, 4))  # ย่อ 20%
             ax.imshow(img, cmap="gray")
-            ax.set_title(title, fontsize=10)
+            ax.set_title(title, fontsize=12)
             ax.axis("off")
+            plt.tight_layout()
+            plt.show()
+            return
+
+        # จำนวนรูปย่อย (ไม่รวมรูปสุดท้าย)
+        k = n - 1
+        rows = 3
+        cols = int(np.ceil(k / 2.0))
+        if cols < 1:
+            cols = 1
+
+        # ย่อหน้าต่างลง 20% จากขนาดฐาน 5 → 4
+        base_size = 4
+        fig, axes = plt.subplots(rows, cols, figsize=(base_size * cols, base_size * rows))
+
+        axes = np.array(axes)
+        if axes.ndim == 1:
+            axes = axes.reshape(rows, cols)
+
+        # ----------------------------
+        # แถวที่ 1–2: รูปขั้นตอน
+        # ----------------------------
+        idx = 0
+        for r in range(2):
+            for c in range(cols):
+                ax = axes[r, c]
+                if idx < k:
+                    title, img = step_images[idx]
+                    ax.imshow(img, cmap="gray")
+                    ax.set_title(title, fontsize=12)
+                    ax.axis("off")
+                    idx += 1
+                else:
+                    ax.axis("off")
+
+        # ----------------------------
+        # แถวที่ 3: รูปสุดท้ายกลางแถว
+        # ----------------------------
+        final_title, final_img = step_images[-1]
+        mid_c = cols // 2  # ตำแหน่งคอลัมน์ตรงกลาง
+
+        for c in range(cols):
+            ax = axes[2, c]
+            if c == mid_c:
+                ax.imshow(final_img, cmap="gray")
+                ax.set_title(final_title, fontsize=12)
+                ax.axis("off")
+            else:
+                ax.axis("off")
 
         plt.tight_layout()
         plt.show()
