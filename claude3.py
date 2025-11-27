@@ -337,7 +337,7 @@ class XrayMonkeyProcessor:
 class XrayProcessorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("โปรแกรมประมวลผลภาพเอกซเรย์ของลิง (ใช้วิธีจากสไลด์เท่านั้น)")
+        self.root.title("X-ray image processing program")
         self.root.geometry("650x850")
 
         self.processor = None
@@ -351,7 +351,7 @@ class XrayProcessorGUI:
 
         Button(
             btn_frame,
-            text="เลือกภาพเอกซเรย์",
+            text="Select an X-ray image",
             command=self.load_image,
             width=20,
             height=2,
@@ -372,20 +372,20 @@ class XrayProcessorGUI:
 
         Label(
             param_frame,
-            text="=== ปรับพารามิเตอร์ตามภาพ ===",
+            text="=== Adjust the parameters as shown in the image. ===",
             font=("Arial", 12, "bold"),
         ).pack()
 
         # Histogram equalization on/off
         hist_frame = Frame(param_frame)
         hist_frame.pack(fill="x", pady=5)
-        Label(hist_frame, text="ใช้ Histogram Equalization:").pack(side="left", padx=5)
+        Label(hist_frame, text="Use Histogram Equalization:").pack(side="left", padx=5)
         tk.Checkbutton(
             hist_frame, variable=self.params["use_hist_eq"], onvalue=True, offvalue=False
         ).pack(side="left")
 
         # Smoothing kernel
-        Label(param_frame, text="ขนาด Gaussian kernel (เบลอภาพก่อนแบ่งส่วน):").pack(
+        Label(param_frame, text="Gaussian kernel size (image blurring before segmentation):").pack(
             anchor="w"
         )
         Scale(
@@ -397,7 +397,7 @@ class XrayProcessorGUI:
         ).pack(fill="x", padx=10)
 
         # Rib length
-        Label(param_frame, text="ความยาว structuring element สำหรับซี่โครง:").pack(
+        Label(param_frame, text="Structuring element length for ribs:").pack(
             anchor="w"
         )
         Scale(
@@ -409,7 +409,7 @@ class XrayProcessorGUI:
         ).pack(fill="x", padx=10)
 
         # Rib thickness
-        Label(param_frame, text="ความหนา structuring element สำหรับซี่โครง:").pack(
+        Label(param_frame, text="Structuring element thickness for ribs:").pack(
             anchor="w"
         )
         Scale(
@@ -421,7 +421,7 @@ class XrayProcessorGUI:
         ).pack(fill="x", padx=10)
 
         # Spine width
-        Label(param_frame, text="ความกว้างบริเวณกระดูกสันหลัง (%)").pack(anchor="w")
+        Label(param_frame, text="Spine region width (%)").pack(anchor="w")
         Scale(
             param_frame,
             from_=10,
@@ -436,7 +436,7 @@ class XrayProcessorGUI:
 
         Button(
             process_frame,
-            text="ประมวลผลภาพ",
+            text="Process image",
             command=self.process_image,
             width=20,
             height=2,
@@ -445,7 +445,7 @@ class XrayProcessorGUI:
 
         Button(
             process_frame,
-            text="แสดงผลลัพธ์",
+            text="Show results",
             command=self.show_results,
             width=20,
             height=2,
@@ -458,7 +458,7 @@ class XrayProcessorGUI:
 
         Button(
             save_frame,
-            text="บันทึกผลลัพธ์",
+            text="Save results",
             command=self.save_results,
             width=20,
             height=2,
@@ -467,24 +467,24 @@ class XrayProcessorGUI:
 
         # status
         self.status_label = Label(
-            self.root, text="กรุณาเลือกภาพเอกซเรย์", font=("Arial", 10), fg="blue"
+            self.root, text="Please select an X-ray image", font=("Arial", 10), fg="blue"
         )
         self.status_label.pack(pady=10)
 
     # ---------- ฟังก์ชัน preview ROI ----------
     def preview_roi(self):
-        """แสดงตัวอย่างบริเวณที่ถูกครอป (ROI) ให้ผู้ใช้ดู"""
+        """Display a preview of the cropped region (ROI) to the user"""
         if self.processor is None:
             return
 
         roi = self.processor.get_current_image()
         if roi is None or roi.size == 0:
-            messagebox.showwarning("คำเตือน", "ยังไม่มีบริเวณให้แสดงตัวอย่าง")
+            messagebox.showwarning("Warning", "No region available for preview")
             return
 
         plt.figure(figsize=(6, 6))
         plt.imshow(roi, cmap="gray")
-        plt.title("ตัวอย่างบริเวณที่จะใช้ประมวลผล (ROI)")
+        plt.title("Preview of the region to be processed (ROI)")
         plt.axis("off")
         plt.tight_layout()
         plt.show()
@@ -492,7 +492,7 @@ class XrayProcessorGUI:
     # ---------------- GUI callbacks ----------------
     def load_image(self):
         file_path = filedialog.askopenfilename(
-            title="เลือกภาพเอกซเรย์",
+            title="Select X-ray image",
             filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp"), ("All files", "*.*")],
         )
         if not file_path:
@@ -501,14 +501,14 @@ class XrayProcessorGUI:
         try:
             self.processor = XrayMonkeyProcessor(file_path)
             self.status_label.config(
-                text=f"✓ โหลดภาพ: {os.path.basename(file_path)}", fg="green"
+                text=f"✓ Load image: {os.path.basename(file_path)}", fg="green"
             )
 
             # วนลูปให้เลือกวิธี crop + preview ได้จนกว่าจะพอใจ
             while True:
                 use_auto = messagebox.askyesno(
-                    "เลือกวิธี Crop",
-                    "ต้องการให้โปรแกรมเลือกช่วงปอดอัตโนมัติหรือไม่?\n"
+                    "Select cropping method",
+                    "Do you want the program to automatically select the lung region?\n"
                     "(Yes = auto-crop ช่วงปอด, No = เลือกบริเวณเองด้วยเมาส์)",
                 )
 
@@ -522,7 +522,7 @@ class XrayProcessorGUI:
                         self.processor.auto_crop_lung_region()
                     except Exception as e:
                         messagebox.showerror(
-                            "ข้อผิดพลาด", f"Auto-crop ล้มเหลว: {e}\nโปรดลองใหม่อีกครั้ง"
+                            "Error", f"Auto-crop failed: {e}\nPlease try again"
                         )
                         continue
                 else:
@@ -530,8 +530,7 @@ class XrayProcessorGUI:
                     ok = self.processor.manual_crop_interactive()
                     if not ok:
                         retry = messagebox.askyesno(
-                            "ไม่ได้เลือกกรอบ",
-                            "ยังไม่ได้เลือกบริเวณใดเลย\nต้องการลองครอปใหม่อีกครั้งหรือไม่?",
+                            "No selection", "No region has been selected\nWould you like to try cropping again?",
                         )
                         if retry:
                             continue
@@ -545,8 +544,7 @@ class XrayProcessorGUI:
                 # แสดง preview ROI
                 self.preview_roi()
                 confirm = messagebox.askyesno(
-                    "ยืนยันกรอบ",
-                    "ต้องการใช้กรอบนี้เป็นบริเวณสำหรับประมวลผลหรือไม่?",
+                    "Confirm selection","Do you want to use this selection as the processing region?",
                 )
                 if confirm:
                     break
@@ -555,17 +553,17 @@ class XrayProcessorGUI:
             self.step_images = [
                 ("Original / ROI", self.processor.get_current_image().copy())
             ]
-            self.status_label.config(text="✓ เลือกบริเวณ ROI เรียบร้อย", fg="green")
+            self.status_label.config(text="✓ ROI region selected successfully", fg="green")
 
         except Exception as e:
-            messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถโหลดภาพ: {e}")
-            self.status_label.config(text="✗ โหลดภาพล้มเหลว", fg="red")
+            messagebox.showerror("Error", f"Unable to load image: {e}")
+            self.status_label.config(text="✗ Image loading failed", fg="red")
             self.processor = None
             self.step_images = []
 
     def process_image(self):
         if self.processor is None:
-            messagebox.showwarning("ข้อมูลไม่สมบูรณ์", "กรุณาเลือกภาพก่อน")
+            messagebox.showwarning("Incomplete data", "Please select an image first")
             return
 
         try:
@@ -608,25 +606,26 @@ class XrayProcessorGUI:
             self.step_images.append(("Bones without Ribs (mask)", bones_no_ribs))
             self.step_images.append(("Final Result", result.copy()))
 
-            self.status_label.config(text="✓ ประมวลผลภาพเสร็จสิ้น", fg="green")
-            messagebox.showinfo("สำเร็จ", "ประมวลผลภาพเสร็จสิ้น!")
+            self.status_label.config(text="✓ Image processing completed", fg="green")
+            messagebox.showinfo("Success", "Image processing completed!")
 
         except Exception as e:
-            messagebox.showerror("ข้อผิดพลาด", f"เกิดข้อผิดพลาดระหว่างประมวลผล: {e}")
-            self.status_label.config(text="✗ ประมวลผลล้มเหลว", fg="red")
+            messagebox.showerror("Error", f"An error occurred during processing: {e}")
+            self.status_label.config(text="✗ Processing failed", fg="red")
 
     def show_results(self):
         if not self.step_images or len(self.step_images) < 2:
-            messagebox.showwarning("ข้อมูลไม่สมบูรณ์", "กรุณาประมวลผลภาพก่อน")
+            messagebox.showwarning("Incomplete data", "Please process the image first")
             return
         self.processor.display_results(self.step_images)
 
     def save_results(self):
         if self.processor is None or not self.step_images:
-            messagebox.showwarning("ข้อมูลไม่สมบูรณ์", "ยังไม่มีผลลัพธ์ให้บันทึก")
+            messagebox.showwarning("Incomplete data", "No results available to save")
             return
 
-        output_dir = filedialog.askdirectory(title="เลือกโฟลเดอร์สำหรับบันทึกผลลัพธ์")
+        output_dir = filedialog.askdirectory(title="Select a folder to save the results"
+)
         if not output_dir:
             return
 
@@ -644,13 +643,14 @@ class XrayProcessorGUI:
             self.processor.save_result(output_dir, "final_result.jpg")
 
             self.status_label.config(
-                text=f"✓ บันทึกผลลัพธ์ทั้งหมดที่: {output_dir}", fg="green"
+                text=f"✓ f"All results saved at: {output_dir}", fg="green",
+
             )
-            messagebox.showinfo("สำเร็จ", "บันทึกผลลัพธ์สำเร็จ!")
+            messagebox.showinfo("Success", "Results saved successfully!")
 
         except Exception as e:
-            messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถบันทึกผลลัพธ์: {e}")
-            self.status_label.config(text="✗ บันทึกผลลัพธ์ล้มเหลว", fg="red")
+            messagebox.showerror("Error", f"Unable to save results: {e}")
+            self.status_label.config(text="✗ Saving results failed", fg="red")
 
 
 def main():
