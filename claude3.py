@@ -21,12 +21,12 @@ class XrayMonkeyProcessor:
         """โหลดภาพเอกซเรย์ (ระดับเทา)"""
         self.original_image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if self.original_image is None:
-            raise ValueError(f"ไม่สามารถโหลดภาพได้: {image_path}")
+            raise ValueError(f"Unable to load image: {image_path}")
         self.current_image = self.original_image.copy()
         self.height, self.width = self.original_image.shape
         self.image_path = image_path
         self.crop_coords = None  # (y1, y2, x1, x2) บริเวณที่ใช้ประมวลผล (เช่น ปอด)
-        print(f"✓ โหลดภาพสำเร็จ: {self.width}x{self.height} pixels")
+        print(f"✓ Image loaded successfully: {self.width}x{self.height} pixels")
 
     # -------------------------------------------------
     # 0) Auto-crop ช่วงปอด (ใช้สัดส่วนของภาพทั้งใบ)
@@ -54,14 +54,14 @@ class XrayMonkeyProcessor:
         y2 = int(max(0, min(h, h * y_end_ratio)))
 
         if x2 <= x1 or y2 <= y1:
-            raise ValueError("ค่า ratio สำหรับ auto-crop ไม่ถูกต้อง ทำให้กรอบว่าง")
+            raise ValueError("The ratio value for auto-crop is invalid, resulting in an empty selection")
 
         self.crop_coords = (y1, y2, x1, x2)
         self.current_image = self.original_image[y1:y2, x1:x2].copy()
         self.height, self.width = self.current_image.shape
 
         print(
-            f"✓ Auto-crop ปอด: x=({x1},{x2}), y=({y1},{y2}), size={self.width}x{self.height}"
+            f"✓ Automatic lung crop: x=({x1},{x2}), y=({y1},{y2}), size={self.width}x{self.height}"
         )
         return self.current_image
 
@@ -72,7 +72,7 @@ class XrayMonkeyProcessor:
         """ให้ผู้ใช้เลือก crop ด้วยเมาส์ (บนภาพเต็ม)"""
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.imshow(self.original_image, cmap="gray")
-        ax.set_title("ลากเมาส์เพื่อเลือกบริเวณลำตัว/ปอด แล้วปล่อย", fontsize=14)
+        ax.set_title("Drag the mouse to select the torso/lung region, then release", fontsize=14)
 
         self.crop_coords = None
 
@@ -90,11 +90,11 @@ class XrayMonkeyProcessor:
             y2 = max(0, min(h, y2))
 
             if x2 <= x1 or y2 <= y1:
-                print("✗ กรอบ crop ไม่ถูกต้อง")
+                print("✗ Invalid crop region")
                 return
 
             self.crop_coords = (y1, y2, x1, x2)
-            print(f"✓ เลือก crop: ({x1}, {y1}) ถึง ({x2}, {y2})")
+            print(f"✓ Select crop: ({x1}, {y1}) ถึง ({x2}, {y2})")
             plt.close()
 
         rect_selector = RectangleSelector(
@@ -115,10 +115,10 @@ class XrayMonkeyProcessor:
             y1, y2, x1, x2 = self.crop_coords
             self.current_image = self.original_image[y1:y2, x1:x2].copy()
             self.height, self.width = self.current_image.shape
-            print(f"✓ ตัดส่วนภาพสำเร็จ: {self.width}x{self.height}")
+            print(f"✓ Image cropping successful: {self.width}x{self.height}")
             return True
         else:
-            print("✗ ไม่ได้เลือก crop")
+            print("✗ No crop selected")
             return False
 
     def reset_to_cropped(self):
@@ -135,7 +135,7 @@ class XrayMonkeyProcessor:
     def histogram_equalization(self):
         """Histogram Equalization ตามบทที่ 3"""
         self.current_image = cv2.equalizeHist(self.current_image)
-        print("✓ ทำ Histogram Equalization สำเร็จ")
+        print("✓ Histogram equalization completed successfully")
         return self.current_image
 
     def gaussian_smoothing(self, ksize: int = 5):
@@ -159,7 +159,7 @@ class XrayMonkeyProcessor:
         _, bone_mask = cv2.threshold(
             self.current_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )
-        print("✓ สร้าง bone mask ด้วย Otsu's method สำเร็จ")
+        print("✓ Bone mask created successfully using Otsu's method")
         return bone_mask
 
     # -------------------------------------------------
@@ -193,7 +193,7 @@ class XrayMonkeyProcessor:
         if smooth_kernel % 2 == 0:
             smooth_kernel += 1
         img_blur = cv2.GaussianBlur(img_for_seg, (smooth_kernel, smooth_kernel), 0)
-        print(f"✓ เตรียมภาพสำหรับ segmentation ด้วย Gaussian (k={smooth_kernel})")
+        print(f"✓ Prepare the image for segmentation using Gaussian (k={smooth_kernel})")
 
         # 2) Otsu thresholding เพื่อหากระดูกทั้งหมด
         _, bone_mask = cv2.threshold(
@@ -205,7 +205,7 @@ class XrayMonkeyProcessor:
         bone_mask_clean = cv2.morphologyEx(
             bone_mask, cv2.MORPH_CLOSE, kernel_small, iterations=1
         )
-        print("✓ ปรับ bone mask ด้วย morphological closing")
+        print("✓ Refine the bone mask using morphological closing")
 
         # 3) หา rib mask ด้วย opening + kernel แนวนอน
         if rib_length < 5:
@@ -228,7 +228,7 @@ class XrayMonkeyProcessor:
         left = max(center_x - spine_half, 0)
         right = min(center_x + spine_half, w)
         ribs_mask[:, left:right] = 0
-        print("✓ สร้าง ribs mask และจำกัดบริเวณด้านข้าง (กันกระดูกสันหลัง)")
+        print("✓ Create the ribs mask and restrict the lateral regions (to avoid the spine)")
 
         # 5) กระดูกอื่นที่ไม่ใช่ซี่โครง (เช่น กระดูกสันหลัง)
         bones_without_ribs_mask = cv2.subtract(bone_mask_clean, ribs_mask)
@@ -239,7 +239,7 @@ class XrayMonkeyProcessor:
         result[ribs_mask == 255] = soft_tissue_img[ribs_mask == 255]
 
         self.current_image = result
-        print("✓ ลบซี่โครง (แทนค่าด้วย soft tissue) สำเร็จ")
+        print("✓ Ribs removed (replaced with soft tissue) successfully")
 
         return result, bone_mask_clean, ribs_mask, bones_without_ribs_mask
 
@@ -249,7 +249,7 @@ class XrayMonkeyProcessor:
     def save_result(self, output_path: str, filename: str = "processed_xray.jpg"):
         full_path = os.path.join(output_path, filename)
         cv2.imwrite(full_path, self.current_image)
-        print(f"✓ บันทึกภาพสำเร็จ: {full_path}")
+        print(f"✓ Image saved successfully: {full_path}")
         return full_path
 
     def get_current_image(self):
@@ -509,7 +509,7 @@ class XrayProcessorGUI:
                 use_auto = messagebox.askyesno(
                     "Select cropping method",
                     "Do you want the program to automatically select the lung region?\n"
-                    "(Yes = auto-crop ช่วงปอด, No = เลือกบริเวณเองด้วยเมาส์)",
+                    "(Yes = auto-crop lung region, No = manually select the region using the mouse)",
                 )
 
                 # reset กลับภาพเต็มก่อนทุกครั้ง
@@ -643,9 +643,10 @@ class XrayProcessorGUI:
             self.processor.save_result(output_dir, "final_result.jpg")
 
             self.status_label.config(
-                text=f"✓ f"All results saved at: {output_dir}", fg="green",
+                text=f"✓ All results saved at: {output_dir}",
+                fg="green",
+                )
 
-            )
             messagebox.showinfo("Success", "Results saved successfully!")
 
         except Exception as e:
