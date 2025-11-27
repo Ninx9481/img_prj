@@ -6,4 +6,4 @@ git push
 
 เอา ver. ใหม่
 
-git commits
+git pull
