@@ -1,10 +1,10 @@
+import os
 import cv2
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 
-import tkinter as tk  # สำหรับ Canvas และตัวแปรบางอย่าง
+import tkinter as tk
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
@@ -39,9 +39,9 @@ class XrayMonkeyProcessor:
         h, w = self.original_image.shape
 
         x1 = int(max(0, min(w - 1, w * x_start_ratio)))
-        x2 = int(max(0, min(w, w * x_end_ratio)))
+        x2 = int(max(0, min(w,     w * x_end_ratio)))
         y1 = int(max(0, min(h - 1, h * y_start_ratio)))
-        y2 = int(max(0, min(h, h * y_end_ratio)))
+        y2 = int(max(0, min(h,     h * y_end_ratio)))
 
         if x2 <= x1 or y2 <= y1:
             raise ValueError(
@@ -238,7 +238,7 @@ class XrayProcessorGUI:
 
         self.processor = None
         self.step_images = []
-        self.result_tk_images = []  # เก็บ reference รูปในผลลัพธ์
+        self.result_tk_images = []
 
         self.image_canvas = None
         self.tk_image = None
@@ -248,10 +248,8 @@ class XrayProcessorGUI:
         self.crop_start = None
         self.crop_rect = None
 
-        # กรอบผลลัพธ์ (สร้างเมื่อกด Show results)
         self.results_frame = None
 
-        # scrollable main area
         self.main_frame = ctk.CTkScrollableFrame(
             root, width=630, height=680, corner_radius=0, fg_color="transparent"
         )
@@ -261,7 +259,7 @@ class XrayProcessorGUI:
 
     # ---------- UI หลัก ----------
     def _build_gui(self):
-        # ===== Title =====
+        # Title
         title_label = ctk.CTkLabel(
             self.main_frame,
             text="X-ray Image",
@@ -269,7 +267,7 @@ class XrayProcessorGUI:
         )
         title_label.pack(pady=(0, 10))
 
-        # ===== Image area =====
+        # Image card
         image_card = ctk.CTkFrame(
             self.main_frame,
             corner_radius=16,
@@ -291,7 +289,7 @@ class XrayProcessorGUI:
         self.image_canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.image_canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
 
-        # ===== Status =====
+        # Status
         self.status_label = ctk.CTkLabel(
             self.main_frame,
             text="Please select an X-ray image",
@@ -300,7 +298,7 @@ class XrayProcessorGUI:
         )
         self.status_label.pack(pady=(8, 6))
 
-        # ===== Select image button =====
+        # Select image button
         select_btn = ctk.CTkButton(
             self.main_frame,
             text="Select an X-ray image",
@@ -311,7 +309,7 @@ class XrayProcessorGUI:
         )
         select_btn.pack(pady=(0, 16))
 
-        # ===== Crop section =====
+        # Crop settings
         crop_title = ctk.CTkLabel(
             self.main_frame,
             text="Crop Settings",
@@ -326,7 +324,6 @@ class XrayProcessorGUI:
         )
         crop_frame.pack(fill="x", padx=6, pady=(0, 8))
 
-        # radio buttons
         radio_row = ctk.CTkFrame(crop_frame, fg_color="transparent")
         radio_row.pack(pady=(8, 4))
 
@@ -354,7 +351,6 @@ class XrayProcessorGUI:
             font=radio_font,
         ).pack(side="left", padx=8)
 
-        # crop buttons
         crop_btn_row = ctk.CTkFrame(crop_frame, fg_color="transparent")
         crop_btn_row.pack(pady=(4, 10))
 
@@ -381,7 +377,7 @@ class XrayProcessorGUI:
             text_color="#1D1D1F",
         ).pack(side="left", padx=6)
 
-        # ===== Parameters section =====
+        # Parameters
         param_title = ctk.CTkLabel(
             self.main_frame,
             text="Processing Parameters",
@@ -425,7 +421,7 @@ class XrayProcessorGUI:
             checkbox_height=14,
         ).pack(side="left")
 
-        # ---- Slider helper (มีตัวเลขแสดงค่า) ----
+        # slider helper
         def slider_callback(value, var, value_label):
             iv = int(round(float(value)))
             var.set(iv)
@@ -435,20 +431,16 @@ class XrayProcessorGUI:
             row = ctk.CTkFrame(parent, fg_color="transparent")
             row.pack(fill="x", padx=10, pady=(4, 4))
 
-            # แถวบน: label + value
             top_row = ctk.CTkFrame(row, fg_color="transparent")
             top_row.pack(fill="x")
 
-            ctk.CTkLabel(top_row, text=label_text, anchor="w").pack(
-                side="left"
-            )
+            ctk.CTkLabel(top_row, text=label_text, anchor="w").pack(side="left")
 
             value_label = ctk.CTkLabel(
                 top_row, text=str(var.get()), anchor="e", width=40
             )
             value_label.pack(side="right")
 
-            # แถวล่าง: slider
             slider = ctk.CTkSlider(
                 row,
                 from_=frm,
@@ -488,7 +480,7 @@ class XrayProcessorGUI:
             40,
         )
 
-        # ===== Action buttons =====
+        # Action buttons
         action_row = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         action_row.pack(pady=14)
 
@@ -525,7 +517,7 @@ class XrayProcessorGUI:
             text_color="#1D1D1F",
         ).pack(side="left", padx=6)
 
-        # ===== Save button (อยู่ล่างสุด) =====
+        # Save button
         self.save_row = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.save_row.pack(pady=(4, 10))
 
@@ -537,76 +529,6 @@ class XrayProcessorGUI:
             height=32,
             corner_radius=18,
         ).pack()
-
-    # ===== Modal popup แบบในรูป =====
-    def show_modal_popup(self, title="Success", message="", kind="success"):
-        popup = ctk.CTkToplevel(self.root)
-        popup.grab_set()  # ทำให้เป็น modal
-        popup.geometry("350x260")
-        popup.resizable(False, False)
-        popup.title("Message")
-        popup.configure(fg_color="#FFFFFF")
-
-        # สีและไอคอนตามประเภท
-        if kind == "success":
-            icon_color = "#34C759"
-            icon_text = "✔"
-        elif kind == "error":
-            icon_color = "#FF3B30"
-            icon_text = "✖"
-        else:
-            icon_color = "#0A84FF"
-            icon_text = "ℹ"
-
-        # ไอคอนวงกลม
-        icon_frame = ctk.CTkFrame(
-            popup,
-            width=70,
-            height=70,
-            corner_radius=35,
-            fg_color=icon_color,
-        )
-        icon_frame.place(relx=0.5, y=55, anchor="center")
-
-        icon_label = ctk.CTkLabel(
-            icon_frame,
-            text=icon_text,
-            font=ctk.CTkFont(size=32, weight="bold"),
-            text_color="white",
-        )
-        icon_label.place(relx=0.5, rely=0.5, anchor="center")
-
-        # ข้อความใหญ่
-        title_label = ctk.CTkLabel(
-            popup,
-            text=title,
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color="#1C1C1E",
-        )
-        title_label.place(relx=0.5, y=125, anchor="center")
-
-        # ข้อความรอง
-        msg_label = ctk.CTkLabel(
-            popup,
-            text=message,
-            font=ctk.CTkFont(size=14),
-            text_color="#3A3A3C",
-            wraplength=280,
-        )
-        msg_label.place(relx=0.5, y=160, anchor="center")
-
-        # ปุ่ม OK
-        ok_button = ctk.CTkButton(
-            popup,
-            text="OK",
-            width=80,
-            height=32,
-            corner_radius=12,
-            fg_color="#5856D6",
-            hover_color="#3C3CBA",
-            command=popup.destroy,
-        )
-        ok_button.place(relx=0.5, y=210, anchor="center")
 
     # ===== helper แสดงภาพบน canvas =====
     def show_image_on_canvas(self, img_gray):
@@ -730,7 +652,6 @@ class XrayProcessorGUI:
             text="Processing has been reset", text_color="#8E8E93"
         )
 
-        # ซ่อนกรอบผลลัพธ์
         if self.results_frame is not None:
             self.results_frame.pack_forget()
             self.results_frame = None
@@ -756,7 +677,6 @@ class XrayProcessorGUI:
             self.processor.crop_coords = None
             self.crop_method.set("auto")
 
-            # ซ่อนผลลัพธ์เก่า
             if self.results_frame is not None:
                 self.results_frame.pack_forget()
                 self.results_frame = None
@@ -811,38 +731,25 @@ class XrayProcessorGUI:
             self.step_images.append(("Bones without Ribs (mask)", bones_no_ribs))
             self.step_images.append(("Final Result", result.copy()))
 
-            # อัปเดตสถานะ + popup แบบใหม่
             self.status_label.configure(
                 text="Image processing completed", text_color="#34C759"
-            )
-            self.show_modal_popup(
-                title="Processing Complete",
-                message="The X-ray image has been processed successfully.",
-                kind="success",
             )
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred during processing: {e}")
             self.status_label.configure(text="Processing failed", text_color="#FF3B30")
-            self.show_modal_popup(
-                title="Processing Failed",
-                message=str(e),
-                kind="error",
-            )
 
     def show_results(self):
         if not self.step_images:
             messagebox.showwarning("Incomplete data", "Please process the image first")
             return
 
-        # ถ้ายังไม่เคยสร้างกรอบผลลัพธ์ ให้สร้างและวาง "เหนือ" save_row
         if self.results_frame is None:
             self.results_frame = ctk.CTkFrame(
                 self.main_frame,
                 corner_radius=12,
                 fg_color=("white", "#1E1E1E"),
             )
-            # ให้กรอบสีขาวกว้างเต็ม และมีขอบซ้าย-ขวาเล็กน้อย
             self.results_frame.pack(
                 before=self.save_row,
                 pady=(0, 10),
@@ -850,7 +757,6 @@ class XrayProcessorGUI:
                 fill="x",
             )
 
-        # ล้าง results เดิม
         for w in self.results_frame.winfo_children():
             w.destroy()
         self.result_tk_images.clear()
@@ -858,11 +764,9 @@ class XrayProcessorGUI:
         max_width = 480
 
         for title, img in self.step_images:
-            # ให้แต่ละบล็อคของ result กว้างเต็มกรอบสีขาว
             item_frame = ctk.CTkFrame(self.results_frame, fg_color="transparent")
             item_frame.pack(pady=6, fill="x")
 
-            # label ชื่อขั้นตอน (อยู่กลาง)
             lbl = ctk.CTkLabel(
                 item_frame,
                 text=title,
@@ -870,7 +774,6 @@ class XrayProcessorGUI:
             )
             lbl.pack(pady=(6, 2))
 
-            # แปลงรูป numpy -> CTkImage
             h, w = img.shape
             scale = min(max_width / w, 1.0)
             disp_w, disp_h = int(w * scale), int(h * scale)
@@ -879,10 +782,9 @@ class XrayProcessorGUI:
             pil_img = Image.fromarray(img_rgb)
 
             tk_img = ctk.CTkImage(light_image=pil_img, size=(disp_w, disp_h))
-            self.result_tk_images.append(tk_img)  # กัน GC
+            self.result_tk_images.append(tk_img)
 
             img_label = ctk.CTkLabel(item_frame, image=tk_img, text="")
-            # เพิ่ม padx ให้มีพื้นหลังขาวด้านข้างรูป
             img_label.pack(padx=20, pady=(0, 8))
 
     def save_results(self):
@@ -908,21 +810,11 @@ class XrayProcessorGUI:
             self.status_label.configure(
                 text=f"All results saved to: {output_dir}", text_color="#34C759"
             )
-            self.show_modal_popup(
-                title="Saved Successfully",
-                message="All step images and the final result have been saved.",
-                kind="success",
-            )
 
         except Exception as e:
             messagebox.showerror("Error", f"Unable to save results: {e}")
             self.status_label.configure(
                 text="Saving results failed", text_color="#FF3B30"
-            )
-            self.show_modal_popup(
-                title="Saving Failed",
-                message=str(e),
-                kind="error",
             )
 
 
@@ -930,10 +822,9 @@ class XrayProcessorGUI:
 #                   main
 # =========================================
 def main():
-    ctk.set_appearance_mode("light")          # ลอง "dark" ได้
-    ctk.set_default_color_theme("blue")      # หรือ "green", "dark-blue"
+    ctk.set_appearance_mode("light")
+    ctk.set_default_color_theme("blue")
 
-    # พื้นหลังเทาอ่อนสไตล์ iOS
     root = ctk.CTk(fg_color="#F2F2F7")
     root.geometry("650x700")
     root.resizable(False, False)
