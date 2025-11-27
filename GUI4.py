@@ -3,19 +3,12 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
-import tkinter as tk
-from tkinter import (
-    filedialog,
-    messagebox,
-    Scale,
-    Button,
-    Label,
-    Frame,
-    HORIZONTAL,
-    BooleanVar,
-)
 
-from PIL import Image, ImageTk  # ใช้แสดงภาพบน Tkinter
+import tkinter as tk  # สำหรับ Canvas และตัวแปรบางอย่าง
+from tkinter import filedialog, messagebox
+
+import customtkinter as ctk
+from PIL import Image, ImageTk
 
 
 # =========================================
@@ -51,7 +44,9 @@ class XrayMonkeyProcessor:
         y2 = int(max(0, min(h, h * y_end_ratio)))
 
         if x2 <= x1 or y2 <= y1:
-            raise ValueError("The ratio value for auto-crop is invalid, resulting in an empty selection")
+            raise ValueError(
+                "The ratio value for auto-crop is invalid, resulting in an empty selection"
+            )
 
         self.crop_coords = (y1, y2, x1, x2)
         self.current_image = self.original_image[y1:y2, x1:x2].copy()
@@ -68,7 +63,10 @@ class XrayMonkeyProcessor:
     def manual_crop_interactive(self):
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.imshow(self.original_image, cmap="gray")
-        ax.set_title("Drag the mouse to select the torso/lung region, then release", fontsize=14)
+        ax.set_title(
+            "Drag the mouse to select the torso/lung region, then release",
+            fontsize=14,
+        )
 
         self.crop_coords = None
 
@@ -92,7 +90,7 @@ class XrayMonkeyProcessor:
             print(f"✓ Select crop: ({x1}, {y1}) ถึง ({x2}, {y2})")
             plt.close()
 
-        rect_selector = RectangleSelector(
+        RectangleSelector(
             ax,
             on_select,
             useblit=True,
@@ -229,74 +227,18 @@ class XrayMonkeyProcessor:
             return self.original_image[y1:y2, x1:x2]
         return self.original_image
 
-    def display_results(self, step_images):
-        n = len(step_images)
-        if n == 0:
-            return
-
-        if n == 1:
-            title, img = step_images[0]
-            fig, ax = plt.subplots(figsize=(4, 4))
-            ax.imshow(img, cmap="gray")
-            ax.set_title(title, fontsize=12)
-            ax.axis("off")
-            plt.tight_layout()
-            plt.show()
-            return
-
-        k = n - 1
-        rows = 3
-        cols = int(np.ceil(k / 2.0))
-        if cols < 1:
-            cols = 1
-
-        base_size = 4
-        fig, axes = plt.subplots(rows, cols, figsize=(base_size * cols, base_size * rows))
-
-        axes = np.array(axes)
-        if axes.ndim == 1:
-            axes = axes.reshape(rows, cols)
-
-        idx = 0
-        for r in range(2):
-            for c in range(cols):
-                ax = axes[r, c]
-                if idx < k:
-                    title, img = step_images[idx]
-                    ax.imshow(img, cmap="gray")
-                    ax.set_title(title, fontsize=12)
-                    ax.axis("off")
-                    idx += 1
-                else:
-                    ax.axis("off")
-
-        final_title, final_img = step_images[-1]
-        mid_c = cols // 2
-
-        for c in range(cols):
-            ax = axes[2, c]
-            if c == mid_c:
-                ax.imshow(final_img, cmap="gray")
-                ax.set_title(final_title, fontsize=12)
-                ax.axis("off")
-            else:
-                ax.axis("off")
-
-        plt.tight_layout()
-        plt.show()
-
 
 # =========================================
-#             Tkinter GUI (with scrollbar)
+#        CustomTkinter GUI (modern)
 # =========================================
 class XrayProcessorGUI:
-    def __init__(self, root):
+    def __init__(self, root: ctk.CTk):
         self.root = root
-        self.root.title("X-ray image processing program")
-        self.root.geometry("650x700")  # ขนาดคงที่ (เดี๋ยวล็อกใน main)
+        self.root.title("X-ray Image Processing")
 
         self.processor = None
         self.step_images = []
+        self.result_tk_images = []  # เก็บ reference รูปในผลลัพธ์
 
         self.image_canvas = None
         self.tk_image = None
@@ -306,219 +248,365 @@ class XrayProcessorGUI:
         self.crop_start = None
         self.crop_rect = None
 
-        # สำหรับ scrollable area
-        self.canvas = None
-        self.content = None
-        self.content_id = None
+        # กรอบผลลัพธ์ (สร้างเมื่อกด Show results)
+        self.results_frame = None
 
-        self._build_scrollable_area()
-        self._build_gui()
-
-    # ---------- สร้างพื้นที่เลื่อน ----------
-    def _build_scrollable_area(self):
-        outer = Frame(self.root)
-        # เว้นขอบซ้าย-ขวาเท่ากัน
-        outer.pack(fill="both", expand=True, padx=10)
-
-        self.canvas = tk.Canvas(outer)
-        vscroll = tk.Scrollbar(outer, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=vscroll.set)
-
-        vscroll.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-
-        # frame ข้างในที่เราจะเอา widget ทั้งหมดไว้
-        self.content = Frame(self.canvas)
-        # วาง content มุมซ้ายบนของ canvas
-        self.content_id = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
-
-        # อัปเดต scrollregion ตามขนาด content
-        self.content.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        # scrollable main area
+        self.main_frame = ctk.CTkScrollableFrame(
+            root, width=630, height=680, corner_radius=0, fg_color="transparent"
         )
+        self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # เลื่อนด้วย mouse wheel
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self._build_gui()
 
     # ---------- UI หลัก ----------
     def _build_gui(self):
-        # ===== หัวข้อด้านบนสุด =====
-        title_label = Label(
-            self.content,
+        # ===== Title =====
+        title_label = ctk.CTkLabel(
+            self.main_frame,
             text="X-ray Image",
-            font=("Arial", 20, "bold"),
-            fg="black",
+            font=ctk.CTkFont(size=22, weight="bold"),
         )
-        title_label.pack(pady=10)
+        title_label.pack(pady=(0, 10))
 
-        # ===== พื้นที่แสดงภาพ =====
-        img_frame = Frame(self.content, bd=2, relief="sunken")
-        img_frame.pack(pady=5)
+        # ===== Image area =====
+        image_card = ctk.CTkFrame(
+            self.main_frame,
+            corner_radius=16,
+            fg_color=("white", "#1E1E1E"),
+        )
+        image_card.pack(pady=5)
 
-        self.image_canvas = tk.Canvas(img_frame, width=512, height=512, bg="black")
-        self.image_canvas.pack()
+        self.image_canvas = tk.Canvas(
+            image_card,
+            width=512,
+            height=512,
+            bg="black",
+            highlightthickness=0,
+            bd=0,
+        )
+        self.image_canvas.pack(padx=10, pady=10)
 
         self.image_canvas.bind("<ButtonPress-1>", self.on_canvas_press)
         self.image_canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.image_canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
 
-        # ===== ปุ่มเลือกภาพ (อยู่เหนือ Choose how to crop) =====
-        btn_frame = Frame(self.content)
-        btn_frame.pack(pady=10)
+        # ===== Status =====
+        self.status_label = ctk.CTkLabel(
+            self.main_frame,
+            text="Please select an X-ray image",
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E93",
+        )
+        self.status_label.pack(pady=(8, 6))
 
-        Button(
-            btn_frame,
+        # ===== Select image button =====
+        select_btn = ctk.CTkButton(
+            self.main_frame,
             text="Select an X-ray image",
             command=self.load_image,
-            width=20,
-            height=2,
-            bg="lightblue",
-        ).pack()
-
-        # ===== หัวข้อ วิธีครอปภาพ =====
-        method_label = Label(
-            self.content,
-            text="== Choose how to crop the image ==",
-            font=("Arial", 14, "bold"),
+            width=200,
+            height=34,
+            corner_radius=18,
         )
-        method_label.pack(pady=(15, 5))
+        select_btn.pack(pady=(0, 16))
 
-        crop_frame = Frame(self.content)
-        crop_frame.pack(pady=5)
+        # ===== Crop section =====
+        crop_title = ctk.CTkLabel(
+            self.main_frame,
+            text="Crop Settings",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        crop_title.pack(pady=(4, 4))
 
-        tk.Radiobutton(
-            crop_frame,
+        crop_frame = ctk.CTkFrame(
+            self.main_frame,
+            corner_radius=12,
+            fg_color=("white", "#1E1E1E"),
+        )
+        crop_frame.pack(fill="x", padx=6, pady=(0, 8))
+
+        # radio buttons
+        radio_row = ctk.CTkFrame(crop_frame, fg_color="transparent")
+        radio_row.pack(pady=(8, 4))
+
+        radio_font = ctk.CTkFont(size=12)
+
+        ctk.CTkRadioButton(
+            radio_row,
             text="Auto crop lung region",
             variable=self.crop_method,
             value="auto",
-        ).pack(side="left", padx=5)
+            height=24,
+            radiobutton_width=14,
+            radiobutton_height=14,
+            font=radio_font,
+        ).pack(side="left", padx=8)
 
-        tk.Radiobutton(
-            crop_frame,
+        ctk.CTkRadioButton(
+            radio_row,
             text="Manual crop (drag on image)",
             variable=self.crop_method,
             value="manual",
-        ).pack(side="left", padx=5)
+            height=24,
+            radiobutton_width=14,
+            radiobutton_height=14,
+            font=radio_font,
+        ).pack(side="left", padx=8)
 
-        Button(
-            crop_frame,
+        # crop buttons
+        crop_btn_row = ctk.CTkFrame(crop_frame, fg_color="transparent")
+        crop_btn_row.pack(pady=(4, 10))
+
+        ctk.CTkButton(
+            crop_btn_row,
             text="Apply crop",
             command=self.apply_crop,
-            width=12,
-        ).pack(side="left", padx=10)
+            width=120,
+            height=30,
+            corner_radius=16,
+            fg_color="#007AFF",
+            hover_color="#005BBB",
+        ).pack(side="left", padx=6)
 
-        Button(
-            crop_frame,
+        ctk.CTkButton(
+            crop_btn_row,
             text="Reset crop",
             command=self.reset_crop,
-            width=12,
-        ).pack(side="left", padx=10)
+            width=120,
+            height=30,
+            corner_radius=16,
+            fg_color="#E5E5EA",
+            hover_color="#D1D1D6",
+            text_color="#1D1D1F",
+        ).pack(side="left", padx=6)
 
-        # ===== พารามิเตอร์ =====
+        # ===== Parameters section =====
+        param_title = ctk.CTkLabel(
+            self.main_frame,
+            text="Processing Parameters",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        param_title.pack(pady=(10, 4))
+
+        param_card = ctk.CTkFrame(
+            self.main_frame,
+            corner_radius=12,
+            fg_color=("white", "#1E1E1E"),
+        )
+        param_card.pack(fill="x", padx=6, pady=(0, 10))
+
         self.params = {
-            "use_hist_eq": BooleanVar(value=True),
+            "use_hist_eq": tk.BooleanVar(value=True),
             "smooth_kernel": tk.IntVar(value=5),
             "rib_length": tk.IntVar(value=40),
             "rib_thickness": tk.IntVar(value=3),
             "spine_width_percent": tk.IntVar(value=25),
         }
 
-        param_frame = Frame(self.content)
-        param_frame.pack(pady=10, padx=20, fill="both", expand=True)
+        # Hist eq
+        hist_row = ctk.CTkFrame(param_card, fg_color="transparent")
+        hist_row.pack(fill="x", padx=10, pady=(8, 4))
 
-        Label(
-            param_frame,
-            text="=== Adjust the parameters as shown in the image. ===",
-            font=("Arial", 12, "bold"),
-        ).pack()
+        ctk.CTkLabel(
+            hist_row,
+            text="Use Histogram Equalization",
+            anchor="w",
+        ).pack(side="left", padx=(0, 10))
 
-        hist_frame = Frame(param_frame)
-        hist_frame.pack(fill="x", pady=5)
-        Label(hist_frame, text="Use Histogram Equalization:").pack(side="left", padx=5)
-        tk.Checkbutton(
-            hist_frame, variable=self.params["use_hist_eq"], onvalue=True, offvalue=False
+        ctk.CTkCheckBox(
+            hist_row,
+            text="",
+            variable=self.params["use_hist_eq"],
+            onvalue=True,
+            offvalue=False,
+            height=22,
+            checkbox_width=14,
+            checkbox_height=14,
         ).pack(side="left")
 
-        Label(param_frame, text="Gaussian kernel size (image blurring before segmentation):").pack(
-            anchor="w"
+        # ---- Slider helper (มีตัวเลขแสดงค่า) ----
+        def slider_callback(value, var, value_label):
+            iv = int(round(float(value)))
+            var.set(iv)
+            value_label.configure(text=str(iv))
+
+        def add_slider(parent, label_text, var, frm, to):
+            row = ctk.CTkFrame(parent, fg_color="transparent")
+            row.pack(fill="x", padx=10, pady=(4, 4))
+
+            # แถวบน: label + value
+            top_row = ctk.CTkFrame(row, fg_color="transparent")
+            top_row.pack(fill="x")
+
+            ctk.CTkLabel(top_row, text=label_text, anchor="w").pack(
+                side="left"
+            )
+
+            value_label = ctk.CTkLabel(
+                top_row, text=str(var.get()), anchor="e", width=40
+            )
+            value_label.pack(side="right")
+
+            # แถวล่าง: slider
+            slider = ctk.CTkSlider(
+                row,
+                from_=frm,
+                to=to,
+                number_of_steps=int(to - frm),
+                command=lambda v: slider_callback(v, var, value_label),
+            )
+            slider.set(var.get())
+            slider.pack(fill="x")
+
+        add_slider(
+            param_card,
+            "Gaussian kernel size (blur before segmentation)",
+            self.params["smooth_kernel"],
+            3,
+            21,
         )
-        Scale(
-            param_frame,
-            from_=3,
-            to=21,
-            orient=HORIZONTAL,
-            variable=self.params["smooth_kernel"],
-        ).pack(fill="x", padx=10)
+        add_slider(
+            param_card,
+            "Structuring element length for ribs",
+            self.params["rib_length"],
+            10,
+            120,
+        )
+        add_slider(
+            param_card,
+            "Structuring element thickness for ribs",
+            self.params["rib_thickness"],
+            1,
+            9,
+        )
+        add_slider(
+            param_card,
+            "Spine region width (%)",
+            self.params["spine_width_percent"],
+            10,
+            40,
+        )
 
-        Label(param_frame, text="Structuring element length for ribs:").pack(anchor="w")
-        Scale(
-            param_frame,
-            from_=10,
-            to=120,
-            orient=HORIZONTAL,
-            variable=self.params["rib_length"],
-        ).pack(fill="x", padx=10)
+        # ===== Action buttons =====
+        action_row = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        action_row.pack(pady=14)
 
-        Label(param_frame, text="Structuring element thickness for ribs:").pack(anchor="w")
-        Scale(
-            param_frame,
-            from_=1,
-            to=9,
-            orient=HORIZONTAL,
-            variable=self.params["rib_thickness"],
-        ).pack(fill="x", padx=10)
-
-        Label(param_frame, text="Spine region width (%)").pack(anchor="w")
-        Scale(
-            param_frame,
-            from_=10,
-            to=40,
-            orient=HORIZONTAL,
-            variable=self.params["spine_width_percent"],
-        ).pack(fill="x", padx=10)
-
-        # ===== ปุ่มประมวลผล/แสดงผล/บันทึก =====
-        process_frame = Frame(self.content)
-        process_frame.pack(pady=15)
-
-        Button(
-            process_frame,
+        ctk.CTkButton(
+            action_row,
             text="Process image",
             command=self.process_image,
-            width=20,
-            height=2,
-            bg="lightgreen",
-        ).pack(side="left", padx=5)
+            width=160,
+            height=34,
+            corner_radius=18,
+        ).pack(side="left", padx=6)
 
-        Button(
-            process_frame,
+        ctk.CTkButton(
+            action_row,
+            text="Reset processing",
+            command=self.reset_processing,
+            width=160,
+            height=34,
+            corner_radius=18,
+            fg_color="#E5E5EA",
+            hover_color="#D1D1D6",
+            text_color="#1D1D1F",
+        ).pack(side="left", padx=6)
+
+        ctk.CTkButton(
+            action_row,
             text="Show results",
             command=self.show_results,
-            width=20,
-            height=2,
-            bg="lightyellow",
-        ).pack(side="left", padx=5)
+            width=160,
+            height=34,
+            corner_radius=18,
+            fg_color="#FFD60A",
+            hover_color="#E5C009",
+            text_color="#1D1D1F",
+        ).pack(side="left", padx=6)
 
-        save_frame = Frame(self.content)
-        save_frame.pack(pady=10)
+        # ===== Save button (อยู่ล่างสุด) =====
+        self.save_row = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.save_row.pack(pady=(4, 10))
 
-        Button(
-            save_frame,
+        ctk.CTkButton(
+            self.save_row,
             text="Save results",
             command=self.save_results,
-            width=20,
-            height=2,
-            bg="lightcoral",
+            width=220,
+            height=32,
+            corner_radius=18,
         ).pack()
 
-        self.status_label = Label(
-            self.content, text="Please select an X-ray image", font=("Arial", 10), fg="blue"
+    # ===== Modal popup แบบในรูป =====
+    def show_modal_popup(self, title="Success", message="", kind="success"):
+        popup = ctk.CTkToplevel(self.root)
+        popup.grab_set()  # ทำให้เป็น modal
+        popup.geometry("350x260")
+        popup.resizable(False, False)
+        popup.title("Message")
+        popup.configure(fg_color="#FFFFFF")
+
+        # สีและไอคอนตามประเภท
+        if kind == "success":
+            icon_color = "#34C759"
+            icon_text = "✔"
+        elif kind == "error":
+            icon_color = "#FF3B30"
+            icon_text = "✖"
+        else:
+            icon_color = "#0A84FF"
+            icon_text = "ℹ"
+
+        # ไอคอนวงกลม
+        icon_frame = ctk.CTkFrame(
+            popup,
+            width=70,
+            height=70,
+            corner_radius=35,
+            fg_color=icon_color,
         )
-        self.status_label.pack(pady=10)
+        icon_frame.place(relx=0.5, y=55, anchor="center")
+
+        icon_label = ctk.CTkLabel(
+            icon_frame,
+            text=icon_text,
+            font=ctk.CTkFont(size=32, weight="bold"),
+            text_color="white",
+        )
+        icon_label.place(relx=0.5, rely=0.5, anchor="center")
+
+        # ข้อความใหญ่
+        title_label = ctk.CTkLabel(
+            popup,
+            text=title,
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color="#1C1C1E",
+        )
+        title_label.place(relx=0.5, y=125, anchor="center")
+
+        # ข้อความรอง
+        msg_label = ctk.CTkLabel(
+            popup,
+            text=message,
+            font=ctk.CTkFont(size=14),
+            text_color="#3A3A3C",
+            wraplength=280,
+        )
+        msg_label.place(relx=0.5, y=160, anchor="center")
+
+        # ปุ่ม OK
+        ok_button = ctk.CTkButton(
+            popup,
+            text="OK",
+            width=80,
+            height=32,
+            corner_radius=12,
+            fg_color="#5856D6",
+            hover_color="#3C3CBA",
+            command=popup.destroy,
+        )
+        ok_button.place(relx=0.5, y=210, anchor="center")
 
     # ===== helper แสดงภาพบน canvas =====
     def show_image_on_canvas(self, img_gray):
@@ -559,7 +647,7 @@ class XrayProcessorGUI:
         x1, y1 = event.x, event.y
         if self.crop_rect is None:
             self.crop_rect = self.image_canvas.create_rectangle(
-                x0, y0, x1, y1, outline="red"
+                x0, y0, x1, y1, outline="#0A84FF", width=2
             )
         else:
             self.image_canvas.coords(self.crop_rect, x0, y0, x1, y1)
@@ -591,11 +679,9 @@ class XrayProcessorGUI:
 
         self.processor.crop_coords = (y_min, y_max, x_min, x_max)
         self.processor.reset_to_cropped()
-        self.step_images = [
-            ("Original / ROI", self.processor.get_current_image().copy())
-        ]
+
         self.show_image_on_canvas(self.processor.get_current_image())
-        self.status_label.config(text="✓ ROI (manual) selected", fg="green")
+        self.status_label.configure(text="ROI (manual) selected", text_color="#0A84FF")
 
     # ===== ปุ่ม Apply crop (auto) =====
     def apply_crop(self):
@@ -606,11 +692,8 @@ class XrayProcessorGUI:
         if self.crop_method.get() == "auto":
             try:
                 self.processor.auto_crop_lung_region()
-                self.step_images = [
-                    ("Original / ROI", self.processor.get_current_image().copy())
-                ]
                 self.show_image_on_canvas(self.processor.get_current_image())
-                self.status_label.config(text="✓ ROI (auto) selected", fg="green")
+                self.status_label.configure(text="ROI (auto) selected", text_color="#0A84FF")
             except Exception as e:
                 messagebox.showerror("Error", f"Auto-crop failed: {e}")
         else:
@@ -628,11 +711,30 @@ class XrayProcessorGUI:
         self.processor.crop_coords = None
         self.processor.reset_to_cropped()
 
-        self.step_images = [
-            ("Original / ROI", self.processor.get_current_image().copy())
-        ]
         self.show_image_on_canvas(self.processor.get_current_image())
-        self.status_label.config(text="✓ Crop has been reset to full image", fg="green")
+        self.status_label.configure(
+            text="Crop has been reset to full image", text_color="#8E8E93"
+        )
+
+    # ===== ปุ่ม Reset processing =====
+    def reset_processing(self):
+        if self.processor is None:
+            messagebox.showwarning("Incomplete data", "Please select an image first")
+            return
+
+        self.processor.reset_to_cropped()
+        self.step_images = []
+
+        self.show_image_on_canvas(self.processor.get_current_image())
+        self.status_label.configure(
+            text="Processing has been reset", text_color="#8E8E93"
+        )
+
+        # ซ่อนกรอบผลลัพธ์
+        if self.results_frame is not None:
+            self.results_frame.pack_forget()
+            self.results_frame = None
+        self.result_tk_images.clear()
 
     # ===== callbacks หลัก =====
     def load_image(self):
@@ -645,8 +747,8 @@ class XrayProcessorGUI:
 
         try:
             self.processor = XrayMonkeyProcessor(file_path)
-            self.status_label.config(
-                text=f"✓ Load image: {os.path.basename(file_path)}", fg="green"
+            self.status_label.configure(
+                text=f"Loaded: {os.path.basename(file_path)}", text_color="#34C759"
             )
 
             self.show_image_on_canvas(self.processor.get_original_image())
@@ -654,9 +756,17 @@ class XrayProcessorGUI:
             self.processor.crop_coords = None
             self.crop_method.set("auto")
 
+            # ซ่อนผลลัพธ์เก่า
+            if self.results_frame is not None:
+                self.results_frame.pack_forget()
+                self.results_frame = None
+            self.result_tk_images.clear()
+
         except Exception as e:
             messagebox.showerror("Error", f"Unable to load image: {e}")
-            self.status_label.config(text="✗ Image loading failed", fg="red")
+            self.status_label.configure(
+                text="Image loading failed", text_color="#FF3B30"
+            )
             self.processor = None
             self.step_images = []
 
@@ -701,20 +811,79 @@ class XrayProcessorGUI:
             self.step_images.append(("Bones without Ribs (mask)", bones_no_ribs))
             self.step_images.append(("Final Result", result.copy()))
 
-            self.show_image_on_canvas(result)
-
-            self.status_label.config(text="✓ Image processing completed", fg="green")
-            messagebox.showinfo("Success", "Image processing completed!")
+            # อัปเดตสถานะ + popup แบบใหม่
+            self.status_label.configure(
+                text="Image processing completed", text_color="#34C759"
+            )
+            self.show_modal_popup(
+                title="Processing Complete",
+                message="The X-ray image has been processed successfully.",
+                kind="success",
+            )
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred during processing: {e}")
-            self.status_label.config(text="✗ Processing failed", fg="red")
+            self.status_label.configure(text="Processing failed", text_color="#FF3B30")
+            self.show_modal_popup(
+                title="Processing Failed",
+                message=str(e),
+                kind="error",
+            )
 
     def show_results(self):
-        if not self.step_images or len(self.step_images) < 2:
+        if not self.step_images:
             messagebox.showwarning("Incomplete data", "Please process the image first")
             return
-        self.processor.display_results(self.step_images)
+
+        # ถ้ายังไม่เคยสร้างกรอบผลลัพธ์ ให้สร้างและวาง "เหนือ" save_row
+        if self.results_frame is None:
+            self.results_frame = ctk.CTkFrame(
+                self.main_frame,
+                corner_radius=12,
+                fg_color=("white", "#1E1E1E"),
+            )
+            # ให้กรอบสีขาวกว้างเต็ม และมีขอบซ้าย-ขวาเล็กน้อย
+            self.results_frame.pack(
+                before=self.save_row,
+                pady=(0, 10),
+                padx=12,
+                fill="x",
+            )
+
+        # ล้าง results เดิม
+        for w in self.results_frame.winfo_children():
+            w.destroy()
+        self.result_tk_images.clear()
+
+        max_width = 480
+
+        for title, img in self.step_images:
+            # ให้แต่ละบล็อคของ result กว้างเต็มกรอบสีขาว
+            item_frame = ctk.CTkFrame(self.results_frame, fg_color="transparent")
+            item_frame.pack(pady=6, fill="x")
+
+            # label ชื่อขั้นตอน (อยู่กลาง)
+            lbl = ctk.CTkLabel(
+                item_frame,
+                text=title,
+                font=ctk.CTkFont(size=12, weight="bold"),
+            )
+            lbl.pack(pady=(6, 2))
+
+            # แปลงรูป numpy -> CTkImage
+            h, w = img.shape
+            scale = min(max_width / w, 1.0)
+            disp_w, disp_h = int(w * scale), int(h * scale)
+            img_resized = cv2.resize(img, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
+            img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2RGB)
+            pil_img = Image.fromarray(img_rgb)
+
+            tk_img = ctk.CTkImage(light_image=pil_img, size=(disp_w, disp_h))
+            self.result_tk_images.append(tk_img)  # กัน GC
+
+            img_label = ctk.CTkLabel(item_frame, image=tk_img, text="")
+            # เพิ่ม padx ให้มีพื้นหลังขาวด้านข้างรูป
+            img_label.pack(padx=20, pady=(0, 8))
 
     def save_results(self):
         if self.processor is None or not self.step_images:
@@ -731,29 +900,41 @@ class XrayProcessorGUI:
                 filename = f"step{idx:02d}_{safe_title}.jpg"
                 full_path = os.path.join(output_dir, filename)
                 cv2.imwrite(full_path, img)
-                print(f"✓ บันทึก: {full_path}")
+                print(f"✓ Saved: {full_path}")
 
             self.processor.current_image = self.step_images[-1][1].copy()
             self.processor.save_result(output_dir, "final_result.jpg")
 
-            self.status_label.config(
-                text=f"✓ All results saved at: {output_dir}",
-                fg="green",
+            self.status_label.configure(
+                text=f"All results saved to: {output_dir}", text_color="#34C759"
             )
-
-            messagebox.showinfo("Success", "Results saved successfully!")
+            self.show_modal_popup(
+                title="Saved Successfully",
+                message="All step images and the final result have been saved.",
+                kind="success",
+            )
 
         except Exception as e:
             messagebox.showerror("Error", f"Unable to save results: {e}")
-            self.status_label.config(text="✗ Saving results failed", fg="red")
+            self.status_label.configure(
+                text="Saving results failed", text_color="#FF3B30"
+            )
+            self.show_modal_popup(
+                title="Saving Failed",
+                message=str(e),
+                kind="error",
+            )
 
 
 # =========================================
 #                   main
 # =========================================
 def main():
-    root = tk.Tk()
-    # ขนาดคงที่ + ล็อกไม่ให้ resize
+    ctk.set_appearance_mode("light")          # ลอง "dark" ได้
+    ctk.set_default_color_theme("blue")      # หรือ "green", "dark-blue"
+
+    # พื้นหลังเทาอ่อนสไตล์ iOS
+    root = ctk.CTk(fg_color="#F2F2F7")
     root.geometry("650x700")
     root.resizable(False, False)
 
