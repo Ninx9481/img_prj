@@ -183,16 +183,13 @@ class XrayMonkeyProcessor:
         if self.current_binary is None or self.step_original is None:
             return
 
-        binary_3ch = cv2.cvtColor(self.current_binary, cv2.COLOR_GRAY2RGB)
-
-        # Resize กลับไปขนาด original ถ้าจำเป็น (simplify: resize ด้วย INTER_NEAREST)
+        # resize mask ให้กลับขนาดเดียวกับ original
         h0, w0 = self.step_original.shape[:2]
-        if binary_3ch.shape[:2] != (h0, w0):
-            binary_3ch = cv2.resize(binary_3ch, (w0, h0), interpolation=cv2.INTER_NEAREST)
+        mask_resized = cv2.resize(self.current_binary, (w0, h0), interpolation=cv2.INTER_NEAREST)
 
         # ทำ overlay: จุดที่เป็น white → highlight
-        colored_mask = np.zeros_like(binary_3ch)
-        colored_mask[self.current_binary > 0] = (255, 0, 0)  # แดง
+        colored_mask = np.zeros((*mask_resized.shape, 3), dtype=np.uint8)
+        colored_mask[mask_resized > 0] = (255, 0, 0)  # แดง
 
         result = cv2.addWeighted(self.step_original, 1.0, colored_mask, alpha, 0)
         self.current_weighted = result.copy()
@@ -202,6 +199,7 @@ class XrayMonkeyProcessor:
     # ---------- helper แปลงไปแสดงบน Tk ----------
     def get_tk_image(self, max_size=(900, 900)):
         """
+        (ไม่ค่อยได้ใช้แล้ว แต่เผื่อไว้)
         return (tk_image, display_width, display_height)
         """
         if self.current_image is None:
@@ -289,7 +287,7 @@ class XrayProcessorGUI:
     def _build_layout(self):
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=3)
-        self.root.grid_columnconfigure(1, weight=2)
+        self.root.grid_columnconfigure(1, weight=1)
 
         # left panel (ภาพ)
         self.left_panel = ctk.CTkFrame(self.root)
@@ -335,98 +333,92 @@ class XrayProcessorGUI:
         )
         self.status_label.pack(fill="x", pady=(2, 4), padx=4)
 
-        # right panel (controls)
+        # right panel (controls) - ให้กรอบใหญ่สูงเท่ากับ content และอยู่ชิดด้านบน
         self.right_panel = ctk.CTkFrame(self.root)
-        self.right_panel.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        self.right_panel.grid(row=0, column=1, sticky="n", padx=8, pady=8)
 
         self._build_right_controls()
 
     def _build_right_controls(self):
-        self.right_panel.grid_rowconfigure(10, weight=1)
-
+        # ใช้ pack ภายใน right_panel ให้แต่ละ step เรียงลงมา และกรอบใหญ่สูงพอดีกับ content
         # ---- Step 1: ROI / Crop ----
         title1 = ctk.CTkLabel(
             self.right_panel, text="Step 1: Select Area (Crop / ROI)",
             font=ctk.CTkFont(size=15, weight="bold")
         )
-        title1.grid(row=0, column=0, sticky="w", padx=8, pady=(4, 2))
+        title1.pack(anchor="w", padx=8, pady=(4, 2))
 
         crop_frame = ctk.CTkFrame(self.right_panel)
-        crop_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
-        crop_frame.grid_columnconfigure(0, weight=1)
+        crop_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         ctk.CTkLabel(
             crop_frame, text="ลากเมาส์บนรูปเพื่อ crop สี่เหลี่ยม",
             anchor="w"
-        ).grid(row=0, column=0, sticky="w", padx=6, pady=(4, 4))
+        ).pack(anchor="w", padx=6, pady=(4, 4))
 
         ctk.CTkButton(
             crop_frame, text="❌ Clear ROI",
             command=self.clear_roi,
-        ).grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 6))
+        ).pack(fill="x", padx=6, pady=(2, 6))
 
         # ---- Step 2: Processing (Otsu + Threshold) ----
         title2 = ctk.CTkLabel(
             self.right_panel, text="Step 2: Processing",
             font=ctk.CTkFont(size=15, weight="bold")
         )
-        title2.grid(row=2, column=0, sticky="w", padx=8, pady=(4, 2))
+        title2.pack(anchor="w", padx=8, pady=(4, 2))
 
         proc_frame = ctk.CTkFrame(self.right_panel)
-        proc_frame.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
-        proc_frame.grid_columnconfigure(0, weight=1)
+        proc_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         ctk.CTkButton(
             proc_frame, text="✨ Auto Otsu",
             command=self.apply_otsu,
-        ).grid(row=0, column=0, sticky="ew", padx=6, pady=(4, 4))
+        ).pack(fill="x", padx=6, pady=(4, 4))
 
         # slider manual threshold (ต่อจาก Otsu)
         self.thresh_var = tk.IntVar(value=128)
 
         row_slider = ctk.CTkFrame(proc_frame, fg_color="transparent")
-        row_slider.grid(row=1, column=0, sticky="ew", padx=6, pady=(4, 4))
-        row_slider.grid_columnconfigure(0, weight=1)
+        row_slider.pack(fill="x", padx=6, pady=(4, 4))
 
         self.thresh_label = ctk.CTkLabel(row_slider, text="Threshold: 128")
-        self.thresh_label.grid(row=0, column=0, sticky="w")
+        self.thresh_label.pack(anchor="w")
 
-        thresh_slider = ctk.CTkSlider(
+        self.thresh_slider = ctk.CTkSlider(
             proc_frame, from_=0, to=255, number_of_steps=255,
             command=self.on_thresh_change
         )
-        thresh_slider.set(128)
-        thresh_slider.grid(row=2, column=0, sticky="ew", padx=6, pady=(4, 4))
-        self.thresh_slider = thresh_slider
+        self.thresh_slider.set(128)
+        self.thresh_slider.pack(fill="x", padx=6, pady=(4, 4))
 
         # ---- Step 3: Weighted Mask ----
         title3 = ctk.CTkLabel(
             self.right_panel, text="Step 3: Weighted Mask",
             font=ctk.CTkFont(size=15, weight="bold")
         )
-        title3.grid(row=4, column=0, sticky="w", padx=8, pady=(4, 2))
+        title3.pack(anchor="w", padx=8, pady=(4, 2))
 
         mask_frame = ctk.CTkFrame(self.right_panel)
-        mask_frame.grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 8))
+        mask_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         self.alpha_var = tk.DoubleVar(value=0.5)
         self.alpha_label = ctk.CTkLabel(
             mask_frame, text="Alpha: 0.50"
         )
-        self.alpha_label.grid(row=0, column=0, sticky="w", padx=6, pady=(4, 2))
+        self.alpha_label.pack(anchor="w", padx=6, pady=(4, 2))
 
-        alpha_slider = ctk.CTkSlider(
+        self.alpha_slider = ctk.CTkSlider(
             mask_frame, from_=0.1, to=1.0, number_of_steps=90,
             command=self.on_alpha_change
         )
-        alpha_slider.set(0.5)
-        alpha_slider.grid(row=1, column=0, sticky="ew", padx=6, pady=(2, 4))
-        self.alpha_slider = alpha_slider
+        self.alpha_slider.set(0.5)
+        self.alpha_slider.pack(fill="x", padx=6, pady=(2, 4))
 
         ctk.CTkButton(
             mask_frame, text="🩻 Apply Weighted Mask (Step 5)",
             command=self.apply_weighted_mask
-        ).grid(row=2, column=0, sticky="ew", padx=6, pady=(4, 6))
+        ).pack(fill="x", padx=6, pady=(4, 6))
 
     # ---------- file actions ----------
     def load_image(self):
@@ -586,22 +578,41 @@ class XrayProcessorGUI:
 
     # ---------- canvas update ----------
     def update_canvas_image(self):
-        self.image_canvas.delete("all")
-
-        tk_img, w, h = self.processor.get_tk_image(max_size=(1000, 900))
-        if tk_img is None:
+        if self.processor.current_image is None:
             return
 
-        self.tk_image = tk_img
+        # ล้างภาพเก่าออกก่อน
+        self.image_canvas.delete("all")
 
+        # ขนาด canvas ล่าสุด (หลัง resize window)
         c_w = self.image_canvas.winfo_width()
         c_h = self.image_canvas.winfo_height()
 
-        x = (c_w - w) // 2
-        y = (c_h - h) // 2
+        if c_w <= 1 or c_h <= 1:
+            # ถ้า canvas ยังไม่ set ขนาดดี ให้ลองใหม่ทีหลังนิดนึง
+            self.root.after(50, self.update_canvas_image)
+            return
+
+        # ขนาดภาพจริง
+        img = self.processor.current_image
+        h, w = img.shape[:2]
+
+        # คำนวณ scale เพื่อให้ภาพพอดีกับ canvas (เห็นครบทั้งรูป)
+        scale = min(c_w / w, c_h / h)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+
+        # resize ภาพ
+        img_resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        pil_img = Image.fromarray(img_resized)
+        self.tk_image = ImageTk.PhotoImage(pil_img)
+
+        # วางภาพไว้ตรงกลาง canvas
+        x = (c_w - new_w) // 2
+        y = (c_h - new_h) // 2
         self.image_canvas.create_image(x, y, anchor="nw", image=self.tk_image)
 
-        # ล้าง rect เก่า
+        # ล้างกรอบ crop เก่าถ้ามี
         self.crop_rect_id = None
 
 
